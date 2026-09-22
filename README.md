@@ -6,6 +6,22 @@ SideNet 是 FSD 锥桶检测后的边界侧别分类器：输入一帧检测锥�
 
 首次使用请按 [数据生成、三分区划分与训练操作指南](docs/TRAINING_GUIDE.md) 执行，包含从克隆安装到独立测试的完整命令。
 
+独立配置训练环境（Linux / WSL）：
+
+```bash
+bash setup_env.sh                  # 自动检测 CPU / NVIDIA GPU，配置本项目 .venv
+bash setup_env.sh --check          # 只检测，不安装或更新依赖
+bash setup_env.sh --device cpu     # 指定 CPU 版 PyTorch
+bash setup_env.sh --device cuda    # 要求可用的 CUDA 环境
+```
+
+脚本支持 Python 3.12/3.13；有 `uv` 时可以自动下载 Python，否则使用本机 Python + venv/pip。
+默认复用 `.venv`，安装 `requirements.txt` 和 PyTorch 2.8.0，并检查实际张量前向/反向运算。
+自动选择驱动支持的 `cu128` 或 `cu126`；未检测到支持的 GPU 时选择 CPU。
+已有可用的 cu126/cu128 PyTorch 会优先保留相应 CUDA 版本。可用 `--cuda cu126` 显式选择，
+用 `--venv .venv-new --python 3.12` 建立新环境。脚本不安装系统驱动，也不启动训练。
+生成器使用它自己的 `../bitfsd-generator/setup_env.sh`，两个脚本不依赖对方仓库。
+
 ## 当前结论
 
 - 默认任务语义是 **track-global directed side**：Left/Right 相对赛道规定的 canonical driving direction，而不是任意瞬时 ego heading。

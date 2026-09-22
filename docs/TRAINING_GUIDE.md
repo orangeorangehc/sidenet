@@ -39,7 +39,43 @@ lidar-cone-perception/
 `.venv/`、生成的 `output/`、训练的 `runs/` 和权重文件均被 Git 忽略，**克隆后需要自行安装和生成**。
 已有文档中“数据已生成”“环境已验证”等内容是作者机器的历史记录。
 
-## 2. 安装一个共享 Python 环境
+## 2. 配置 Python 环境
+
+推荐分别配置两个项目，各自使用自己的 `.venv`。在 `SideNet/` 执行：
+
+```bash
+bash ../bitfsd-generator/setup_env.sh
+bash setup_env.sh
+```
+
+两个脚本互相独立，支持 Linux / WSL、Python 3.12/3.13。有 `uv` 时可以自动下载 Python；
+否则使用本机 Python + venv/pip。脚本不会安装系统驱动、生成数据或启动训练。
+缺少 Python 和 uv 时，会给出安装提示。重复执行会复用环境和满足要求的依赖，
+SideNet 会将 PyTorch 配置为所选的 2.8.0 CPU/CUDA 版本。
+
+只检查现有环境或指定硬件：
+
+```bash
+bash ../bitfsd-generator/setup_env.sh --check
+bash setup_env.sh --check
+
+# 按需选择一条配置命令
+bash setup_env.sh --device cpu
+bash setup_env.sh --device cuda
+bash setup_env.sh --cuda cu126
+```
+
+SideNet 自动模式优先保留已有可用的 cu126/cu128 PyTorch；否则根据 `nvidia-smi` 报告的
+驱动 CUDA 支持选择 cu128 或 cu126，未检测到支持的 GPU 时安装 CPU 版。
+`--device cuda` 在无法检测适配驱动时会报错，不会退回 CPU。
+安装后的实际张量前向/反向检查会进一步验证 wheel 和 GPU 是否兼容。
+这里检测的是驱动能力，不要求本机安装 `nvcc` 或 CUDA Toolkit。
+
+两个脚本均支持 `--venv .venv-new --python 3.12`。自定义环境后，后面的 `.venv/bin/python`
+需要对应替换。`--python` 只用于新建环境；已有环境不会被删除或重建。
+使用自动配置后，可以直接进入第 3 步。
+
+### 可选：手动配置共享环境
 
 以下命令在 `SideNet/` 中执行。生成器的批量采集流程与训练器都使用这个环境，避免混用系统 Python：
 
@@ -80,9 +116,12 @@ python -c "import sys, torch, numpy, yaml; print(sys.executable); print('torch:'
 
 ```bash
 cd ../bitfsd-generator
-../SideNet/.venv/bin/python collect_multiseed.py \
+.venv/bin/python collect_multiseed.py \
   --config config/perceive_mixed.yaml
 ```
+
+若选择了上面的手动共享环境方案，将生成命令中的 `.venv/bin/python` 换成
+`../SideNet/.venv/bin/python`；自动配置方案默认使用生成器自己的环境。
 
 配置 `bitfsd-generator/config/perceive_mixed.yaml` 的主要内容：
 
@@ -129,7 +168,7 @@ x y z dx dy dz heading score class_name
 
 ```bash
 # 仍在 bitfsd-generator/；这是可选的新版本示例
-../SideNet/.venv/bin/python collect_multiseed.py \
+.venv/bin/python collect_multiseed.py \
   --config config/perceive_mixed.yaml \
   --output output/sidenet_data_mixed_ego_v2
 ```

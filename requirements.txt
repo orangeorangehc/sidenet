@@ -1,0 +1,3 @@
+# PyTorch is installed separately by setup_env.sh for the selected CPU/CUDA target.
+numpy>=2.4.4,<3
+PyYAML>=6.0.3,<7
