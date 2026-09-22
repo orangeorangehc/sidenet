@@ -1,0 +1,55 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables (keep shareable templates)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Local editor / Claude Code settings
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local datasets and generated outputs; keep configs/ and splits/ versioned
+/data/
+/datasets/
+/output/
+/outputs/
+
+# Checkpoints & training logs
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+checkpoints/
+runs/
+wandb/
+logs/
+*.log
+events.out.tfevents.*

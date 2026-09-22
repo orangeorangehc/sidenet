@@ -1,0 +1,61 @@
+# E1 diagnostic: same legacy world-coordinate corpus, but grouped holdout.
+data:
+  data_dir: ../bitfsd-generator/output/sidenet_data
+  coordinate_frame: world
+  side_semantics: track_global
+  input_mode: xyzs
+  num_classes: 2
+  include_dirs:
+    - FSCZ24
+    - FSE22
+    - FSE23
+    - FSE24
+    - FSG19
+    - FSG21
+    - FSG23
+    - FSG24
+    - FSI24
+    - FSO20
+    - FSS19
+    - FSS22_V1
+    - FSS22_V2
+    - hairpin_s42
+    - simple_oval_s42
+  exclude_dirs: []
+  allow_legacy_without_metadata: true
+  assumed_legacy_coordinate_frame: world
+  normalize: null
+
+split:
+  strategy: track_holdout
+  seed: 42
+  val_ratio: 0.2
+  val_groups: [FSCZ24, FSG24, FSS22]
+
+model:
+  architecture: dgcnn
+  dropout: 0.1
+  dgcnn_k: 16
+  dgcnn_dims: [64, 64, 128]
+
+training:
+  seed: 42
+  epochs: 300
+  batch_size: 16
+  lr: 0.001
+  weight_decay: 0.01
+  device: auto
+  deterministic: true
+  selection_metric: macro_track_accuracy
+
+augmentation:
+  enabled: true
+  transform_origin: centroid
+  rot_range: 0.2618
+  scale_range: [0.97, 1.03]
+  noise_std: 0.02
+  flip_prob: 0.5
+
+save:
+  save_dir: runs/dgcnn_world_track_holdout
+  checkpoint_name: dgcnn_world_track_holdout.pth

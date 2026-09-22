@@ -1,0 +1,11 @@
+# Membership is fixed before training or looking at model scores.
+# All seeds and derived versions of a family belong to one partition.
+expected_seeds: [42, 43, 44]
+real:
+  train: [FSE22, FSE23, FSE24, FSG19, FSG23, FSI24, FSO20, FSS19]
+  validation: [FSCZ24, FSG21]
+  test: [FSG24, FSS22]
+synthetic:
+  train: [simple_oval, tight_oval, hairpin]
+  validation: [triangle]
+  test: []
