@@ -4,6 +4,8 @@ SideNet 是 FSD 锥桶检测后的边界侧别分类器：输入一帧检测锥�
 
 工程设计与证据审计见 [`docs/ENGINEERING_REVIEW.md`](docs/ENGINEERING_REVIEW.md)。
 
+首次使用请按 [数据生成、三分区划分与训练操作指南](docs/TRAINING_GUIDE.md) 执行，包含从克隆安装到独立测试的完整命令。
+
 ## 当前结论
 
 - 默认任务语义是 **track-global directed side**：Left/Right 相对赛道规定的 canonical driving direction，而不是任意瞬时 ego heading。
