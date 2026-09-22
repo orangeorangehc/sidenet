@@ -1,0 +1,19 @@
+# bash split_data.sh
+# 所有相对路径均相对于 SideNet/sidenet 项目根目录。
+data_dir: ../bitfsd-generator/output/sidenet_data_pipeline_ego
+output:
+  data_config: configs/train_data.yaml  # 自动生成，只包含数据选择与划分
+  manifest: splits/pipeline_ego.json   # 保存 train / validation / test 帧清单
+
+# 必须与生成配置 augmentation.seeds 一致。
+expected_seeds: [42, 43, 44]
+split_seed: 42
+# 按赛道家族指定归属；同一赛道的所有 seed、_test、_V1/V2 保持在同一分区。
+real:
+  train: [FSE22, FSE23, FSE24, FSG19, FSG23, FSI24, FSO20, FSS19]
+  validation: [FSCZ24, FSG21]
+  test: [FSG24, FSS22]
+synthetic:
+  train: [simple_oval, tight_oval, hairpin]
+  validation: [triangle]
+  test: []

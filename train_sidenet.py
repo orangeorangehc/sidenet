@@ -467,6 +467,9 @@ def main() -> None:
     num_classes = int(data_cfg.get("num_classes", 2))
     _validate_labels(samples, num_classes)
     train_samples, val_samples, split_manifest = split_frames(samples, split_cfg)
+    expected_sha256 = data_cfg.get("expected_sha256")
+    if expected_sha256 and split_manifest["dataset_sha256"] != expected_sha256:
+        raise ValueError("Dataset changed since preparation; rerun split_data.sh before training")
     write_split_manifest(split_manifest, save_dir / "split_manifest.json")
 
     print("Configuration:")

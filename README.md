@@ -22,6 +22,18 @@ bash setup_env.sh --device cuda    # 要求可用的 CUDA 环境
 用 `--venv .venv-new --python 3.12` 建立新环境。脚本不安装系统驱动，也不启动训练。
 生成器使用它自己的 `../bitfsd-generator/setup_env.sh`，两个脚本不依赖对方仓库。
 
+生成、划分和训练现已提供三个独立脚本，参数分别放在专用 YAML 中：
+
+```bash
+bash ../bitfsd-generator/generate_data.sh  # config/generate_data.yaml
+bash split_data.sh                       # configs/split_data.yaml
+bash start_training.sh                   # configs/train.yaml
+```
+
+默认输出使用新的 `sidenet_data_pipeline_ego` 数据目录。训练参数与自动生成的划分配置分开保存，
+重新划分不会覆盖调参。三个脚本均支持 `--config` 和 `--dry-run`。
+完整参数、路径和产物说明见 [三个脚本的使用指南](docs/WORKFLOW_SCRIPTS.md)。
+
 ## 当前结论
 
 - 默认任务语义是 **track-global directed side**：Left/Right 相对赛道规定的 canonical driving direction，而不是任意瞬时 ego heading。

@@ -1,0 +1,42 @@
+# bash start_training.sh
+# 相对路径均相对于 SideNet/sidenet 项目根目录。重新划分不会覆盖本文件。
+data_config: configs/train_data.yaml
+
+data:
+  input_mode: xyz
+  num_classes: 2
+  normalize: null
+
+model:
+  architecture: dgcnn
+  dropout: 0.1
+  dgcnn_k: 16
+  dgcnn_dims: [64, 64, 128]
+
+training:
+  seed: 42
+  epochs: 300
+  batch_size: 16
+  lr: 0.001
+  weight_decay: 0.01
+  device: cuda       # 容器 GPU 训练；CPU 试跑改成 cpu，也可使用 auto
+  deterministic: true
+  selection_metric: macro_track_accuracy
+
+augmentation:
+  enabled: true
+  transform_origin: ego
+  rot_range: 0.05236
+  scale_range: [0.97, 1.03]
+  noise_std: 0.02
+  flip_prob: 0.5
+
+save:
+  save_dir: runs/dgcnn_pipeline_run01  # 每次训练使用新目录，拒绝覆盖已有结果
+  checkpoint_name: dgcnn.pth
+
+# 在导入 PyTorch 之前设置；不需要在终端手动 export。
+runtime:
+  OMP_NUM_THREADS: 2
+  MKL_NUM_THREADS: 2
+  CUBLAS_WORKSPACE_CONFIG: ":4096:8"
