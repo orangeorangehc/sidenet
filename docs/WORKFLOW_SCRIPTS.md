@@ -16,6 +16,8 @@ cd ~/lidar-cone-perception/bitfsd-generator
 bash generate_data.sh
 
 cd ../SideNet  # 容器中如果目录名是小写，改成 cd ../sidenet
+# 新生成数据时，把 configs/split_data.yaml 的 data_dir 设为上一步输出目录。
+# 当前配置使用扩充后的 sidenet_data_extended_ego 数据。
 bash split_data.sh
 bash start_training.sh
 ```
@@ -39,11 +41,19 @@ PYTHON_BIN=/path/to/venv/bin/python bash start_training.sh
 - `synthetic_tracks`：合成预设名，形状定义在 `config/track_presets.yaml`。
 - `sensor`、`ego`、`perception`：LiDAR 范围、采样间距、定位噪声、漏检等。
 - `augmentation.seeds`：观测种子，默认 `[42, 43, 44]`。
-- `output.dir`：输出数据集目录，默认 `output/sidenet_data_pipeline_ego`。
+- `track_profiles`：特殊地图的训练适配；acceleration 使用 `open_boundaries`，skidpad 使用 `skidpad`。
+- `base_dataset`：可选的已有多 seed 数据集；旧目录逐文件复制，只生成新配置增加的赛道，保留已有帧。
+- `output.dir`：输出数据集目录，默认 `output/sidenet_data_extended_ego`。
 
 当前多 seed 流程要求 `augmentation.flip: false` 和 `output.coordinate_frame: ego`。
-默认 14 个真实地图 + 4 个合成预设，共产生 54 个赛道目录。seed 不改变赛道几何。
+当前配置包含 16 个地图文件 + 4 个合成预设，共 60 个赛道目录。seed 不改变赛道几何。
+默认以 `output/sidenet_data_mixed_ego` 为基础扩充；若从零生成全部数据，删除 `base_dataset` 配置。
+复用时传感器、位姿、噪声和 seed 配置必须与旧数据一致，不能改变已有赛道的 profile。
 已有输出目录会报错；更换 `output.dir` 可生成新的数据集。
+
+`acceleration` 使用开放直线路线，排除 invisible 虚拟锥桶；显式属于左右边界的橙色锥桶保留侧别。
+`skidpad` 将 unknown 列表中的蓝黄内圈补入左右边界，按右圈顺时针两圈、左圈逆时针两圈及进出场直线采样。
+这项训练适配保留原始地图文件；左右标签与该行驶路线一致。`gripMap.yaml` 只有地面附着系数，没有锥桶标签，不能生成此类训练数据。
 
 ## 2. 划分配置
 
@@ -52,12 +62,19 @@ PYTHON_BIN=/path/to/venv/bin/python bash start_training.sh
 - `data_dir`：必须指向上一步的输出目录。
 - `expected_seeds`：必须与生成配置的 `augmentation.seeds` 一致。
 - `real`、`synthetic` 下的 `train`、`validation`、`test`：指定赛道家族归属。
+- `separate_version_families`：需要按地图版本分别划分的家族；省略时合并所有版本。
 - `output.data_config`：自动生成的数据配置，默认 `configs/train_data.yaml`。
 - `output.manifest`：三分区帧清单，默认 `splits/pipeline_ego.json`。
 
-同一家族的不同 seed、`_test`、`_V1/V2` 版本保留在同一分区。
+当前 `split_data.yaml` 设置 `separate_version_families: [FSS22]`，将 `FSS22_V1`
+放入验证集、`FSS22_V2` 放入测试集。其余归属保持原样：验证还包括 FSCZ24、FSG21、triangle，
+测试还包括 FSG24。列表中填写 `FSS22_V1` / `FSS22_V2`，不再填写合并名称 `FSS22`。
+同一版本的不同 seed、`_test`、`_flip` 仍保留在同一分区，未显式列出的家族仍合并其所有版本。
+这是按地图版本隔离的评估，不再是整个 FSS22 家族均未参与模型选择的家族留出评估。
+旧的 `mixed_split.yaml` 和历史划分清单仍使用合并版本的规则。
 当前流程要求三个分区均非空、均含左右两类，最终测试只包含真实地图。
 它不按帧随机切分，也不移动或复制原始数据。
+`real.train` 中的 `acceleration`、`skidpad` 包含两个项目全部 seed 的所有有效帧，不参与验证或测试。
 
 `train_data.yaml` 只保存训练/验证目录选择、坐标约定、划分信息和数据指纹。
 不要手动编辑这个生成文件；改变数据或分区后重新运行 `bash split_data.sh`。

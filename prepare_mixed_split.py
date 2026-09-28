@@ -10,27 +10,39 @@ from pathlib import Path
 
 import torch
 import yaml
+from split_policy import excluded_groups
 
-from sidenet_data import canonical_track_group, dataset_fingerprint, load_frames, split_frames
+from sidenet_data import (
+    canonical_track_group, dataset_fingerprint, get_separate_version_families,
+    load_frames, split_frames,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
-def summarize(samples):
+def summarize(samples, *, separate_version_families=()):
     left = sum(int((s.labels == 0).sum()) for s in samples)
     right = sum(int((s.labels == 1).sum()) for s in samples)
     return {
         "num_frames": len(samples),
         "num_cones": left + right,
         "label_counts": {"Left": left, "Right": right},
-        "groups": sorted({canonical_track_group(s.track) for s in samples}),
+        "groups": sorted({
+            canonical_track_group(s.track, separate_version_families=separate_version_families)
+            for s in samples
+        }),
         "tracks": sorted({s.track for s in samples}),
     }
 
 
 def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=False):
     policy = yaml.safe_load(Path(policy_path).read_text())
+    version_families = get_separate_version_families(policy)
+
+    def track_group(name):
+        return canonical_track_group(name, separate_version_families=version_families)
+
     expected_seeds = set(policy["expected_seeds"])
     membership = {}
     for source_type in ("real", "synthetic"):
@@ -41,19 +53,25 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
                 membership[group] = (source_type, partition)
     if policy["synthetic"]["test"]:
         raise ValueError("This recipe reserves the final test for real track maps")
+    excluded = excluded_groups(policy, membership)
 
     samples, summary = load_frames(
         data_dir, expected_coordinate_frame="ego", expected_side_semantics="track_global"
     )
-    observed_groups = {canonical_track_group(s.track) for s in samples}
-    if observed_groups != set(membership):
-        raise ValueError(f"Policy/dataset family mismatch: {observed_groups ^ set(membership)}")
+    observed_groups = {track_group(s.track) for s in samples}
+    expected_groups = set(membership) | excluded
+    if observed_groups != expected_groups:
+        raise ValueError(f"Policy/dataset family mismatch: {observed_groups ^ expected_groups}")
+    excluded_samples = [s for s in samples if track_group(s.track) in excluded]
+    samples = [s for s in samples if track_group(s.track) not in excluded]
     sources = {}
     source_seeds = defaultdict(set)
     for name in summary["tracks"]:
+        if track_group(name) in excluded:
+            continue
         meta = yaml.safe_load((Path(data_dir) / name / "metadata.yaml").read_text())
         source = meta["source"]
-        group = canonical_track_group(name)
+        group = track_group(name)
         if source["type"] != membership[group][0]:
             raise ValueError(f"Source type mismatch for {name}")
         if name != f"{source['track']}_s{source['seed']}":
@@ -74,25 +92,31 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
             len(row) != 9 or row[-1] not in {"Cone_Left", "Cone_Right"} for row in rows
         ):
             raise ValueError(f"Invalid training row: {sample.path}")
-        partition = membership[canonical_track_group(sample.track)][1]
+        partition = membership[track_group(sample.track)][1]
         partitions[partition].append(sample)
 
     result = {}
     used_ids, used_groups = set(), set()
     for name, part in partitions.items():
-        stats = summarize(part)
+        stats = summarize(part, separate_version_families=version_families)
         ids = {s.sample_id for s in part}
         groups = set(stats["groups"])
-        if not part or len(ids) != len(part) or ids & used_ids or groups & used_groups:
+        optional_empty_test = name == "test" and not any(
+            policy[source]["test"] for source in ("real", "synthetic")
+        )
+        if (not part and not optional_empty_test) or len(ids) != len(part) or ids & used_ids or groups & used_groups:
             raise ValueError(f"Empty, duplicated or leaking partition: {name}")
-        if min(stats["label_counts"].values()) == 0:
+        if part and min(stats["label_counts"].values()) == 0:
             raise ValueError(f"Partition lacks a label class: {name}")
         used_ids.update(ids)
         used_groups.update(groups)
         result[name] = {
             **stats,
             "by_source": {
-                origin: summarize([s for s in part if sources[s.track]["type"] == origin])
+                origin: summarize(
+                    [s for s in part if sources[s.track]["type"] == origin],
+                    separate_version_families=version_families,
+                )
                 for origin in ("real", "synthetic")
             },
             "frame_ids": sorted(ids),
@@ -106,6 +130,7 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
     )
     config["data"]["exclude_dirs"] = []
     config["split"]["val_groups"] = result["validation"]["groups"]
+    config["split"]["separate_version_families"] = version_families
     config["split"]["seed"] = policy.get("split_seed", config["split"]["seed"])
     config["save"]["save_dir"] = "runs/dgcnn_mixed"
     trainval, _ = load_frames(
@@ -130,10 +155,15 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
         "dataset_sha256": dataset_fingerprint(samples),
         "train_validation_sha256": actual["dataset_sha256"],
         "num_frames": len(samples),
-        "num_cones": summary["num_cones"],
+        "num_cones": sum(part["num_cones"] for part in result.values()),
         "group_overlap": [],
         "policy": policy,
         "partitions": result,
+        "excluded": {
+            **summarize(excluded_samples, separate_version_families=version_families),
+            "frame_ids": sorted(s.sample_id for s in excluded_samples),
+            "dataset_sha256": dataset_fingerprint(excluded_samples),
+        },
     }
     for path in (config_output, manifest_output):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +178,7 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
             "split_manifest": os.path.relpath(Path(manifest_output).resolve(), PROJECT_ROOT),
         }
     Path(config_output).write_text(
-        "# Generated by prepare_mixed_split.py; final test tracks are excluded.\n"
+        "# Generated by prepare_mixed_split.py; test and exclude_groups tracks are omitted.\n"
         + yaml.safe_dump(config, sort_keys=False)
     )
     Path(manifest_output).write_text(json.dumps(manifest, indent=2) + "\n")
@@ -156,7 +186,8 @@ def prepare(data_dir, policy_path, config_output, manifest_output, *, data_only=
         print(f"{name}: {info['num_frames']} frames, {info['num_cones']} cones, groups={info['groups']}")
         for origin, stats in info["by_source"].items():
             print(f"  {origin}: {stats['num_frames']} frames, {stats['num_cones']} cones")
-    print(f"Saved {config_output} and {manifest_output}; family overlap = 0")
+    print(f"Excluded: {len(excluded)} families, {len(excluded_samples)} frames (files retained)")
+    print(f"Saved {config_output} and {manifest_output}; group overlap = 0")
     return manifest
 
 

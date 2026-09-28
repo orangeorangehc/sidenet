@@ -1,19 +1,91 @@
 # bash split_data.sh
-# 所有相对路径均相对于 SideNet/sidenet 项目根目录。
-data_dir: ../bitfsd-generator/output/sidenet_data_pipeline_ego
+# Every observation seed and frame stays with its source track family.
+# FSE22 includes FSE22_test; FSS22 includes V1 and V2.
+data_dir: ../bitfsd-generator/output/sidenet_new_data_ego_4
 output:
-  data_config: configs/train_data.yaml  # 自动生成，只包含数据选择与划分
-  manifest: splits/pipeline_ego.json   # 保存 train / validation / test 帧清单
-
-# 必须与生成配置 augmentation.seeds 一致。
-expected_seeds: [42, 43, 44]
+  data_config: configs/train_new_data_4.yaml
+  manifest: splits/new_data_ego_4.json
+expected_seeds:
+- 42
+- 43
 split_seed: 42
-# 按赛道家族指定归属；同一赛道的所有 seed、_test、_V1/V2 保持在同一分区。
+separate_version_families: []
 real:
-  train: [FSE22, FSE23, FSE24, FSG19, FSG23, FSI24, FSO20, FSS19]
-  validation: [FSCZ24, FSG21]
-  test: [FSG24, FSS22]
+  train:
+  - FSE22
+  - FSE23
+  - FSE24
+  - FSG19
+  - FSG23
+  - FSI24
+  - FSO20
+  - FSS19
+  - FSG21
+  - FSS22
+  validation: []
+  test:
+  - FSCZ24
+  - FSG24
+  - acceleration
+  - skidpad
 synthetic:
-  train: [simple_oval, tight_oval, hairpin]
-  validation: [triangle]
+  train:
+  - simple_oval
+  - tight_oval
+  - hairpin
+  - s_curve
+  - triangle
+  - long_track
+  - fsd_default_g1
+  - fsd_default_g2
+  - fsd_default_g3
+  - fsd_default_g4
+  - fsd_default_g5
+  - fsd_default_g6
+  - fsd_default_g7
+  - fsd_default_g8
+  - fsd_default_g9
+  - fsd_default_g10
+  - fsd_default_g11
+  - fsd_default_g12
+  - fsd_default_g13
+  - fsd_default_g14
+  - fsd_default_g15
+  - fsd_default_g16
+  - fsd_default_g17
+  - fsd_default_g18
+  - fsd_default_g19
+  - fsd_default_g20
+  - fsd_default_g100
+  - fsd_default_g101
+  - fsd_default_g102
+  - fsd_default_g103
+  - fsd_default_g104
+  - fsd_default_g105
+  - fsd_default_g106
+  - fsd_default_g107
+  - fsd_default_g108
+  - fsd_default_g109
+  - fsd_default_g110
+  - fsd_default_g111
+  - fsd_default_g112
+  - fsd_default_g113
+  - fsd_default_g114
+  - fsd_default_g115
+  - fsd_default_g116
+  - fsd_default_g117
+  - fsd_default_g118
+  - fsd_default_g119
+  validation:
+  - fsd_default_g21
+  - fsd_default_g22
+  - fsd_default_g23
+  - fsd_default_g24
+  - fsd_default_g25
+  - fsd_default_g120
+  - fsd_default_g121
+  - fsd_default_g122
+  - fsd_default_g123
+  - fsd_default_g124
   test: []
+exclude_groups: []

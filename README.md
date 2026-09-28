@@ -30,7 +30,8 @@ bash split_data.sh                       # configs/split_data.yaml
 bash start_training.sh                   # configs/train.yaml
 ```
 
-默认输出使用新的 `sidenet_data_pipeline_ego` 数据目录。训练参数与自动生成的划分配置分开保存，
+默认输出使用新的 `sidenet_data_extended_ego` 数据目录，复用旧混合数据并加入 acceleration、skidpad 的训练帧。
+训练参数与自动生成的划分配置分开保存，
 重新划分不会覆盖调参。三个脚本均支持 `--config` 和 `--dry-run`。
 完整参数、路径和产物说明见 [三个脚本的使用指南](docs/WORKFLOW_SCRIPTS.md)。
 
@@ -125,6 +126,9 @@ python train_sidenet.py configs/dgcnn.yaml \
 `--seed` 只改变 model/augmentation seed，保持 fold 不变；只有显式 `--split-seed` 才改变自动生成的 split。配置已给出 `val_groups` 时，fold 不随二者变化。
 
 默认 holdout groups 为 `FSCZ24 / FSG24 / FSS22`。`FSE22_test` 与 `FSE22`、`FSS22_V1/V2`、`_flip` 和同源 synthetic seed variants 会自动归入同一个 track family，避免跨 split。
+可用 `separate_version_families: [FSS22]` 显式保留版本分组；当前 `configs/split_data.yaml`
+采用此设置，将 V1 用于验证、V2 用于测试。同一版本的全部 seed 仍一起划分，旧配置默认行为不变。
+直接使用训练配置时，该选项位于 `split` 下；使用 `split_data.sh` 时会自动传递到生成的训练数据配置。
 
 每次训练保存：
 

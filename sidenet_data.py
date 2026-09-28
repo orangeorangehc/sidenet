@@ -359,17 +359,35 @@ def load_frames(
     return samples, summary
 
 
-def canonical_track_group(track_name: str) -> str:
-    """Keep derived variants of one physical track in the same split."""
+def canonical_track_group(
+    track_name: str, *, separate_version_families: Sequence[str] = ()
+) -> str:
+    """Group seeds/variants together, preserving versions for opted-in families."""
     name = track_name
+    version = ""
     changed = True
     while changed:
         previous = name
         name = re.sub(r"_(?:flip|test)$", "", name, flags=re.IGNORECASE)
-        name = re.sub(r"_V\d+$", "", name, flags=re.IGNORECASE)
+        match = re.search(r"_V\d+$", name, flags=re.IGNORECASE)
+        if match:
+            version = version or match.group()
+            name = name[:match.start()]
         name = re.sub(r"_s\d+$", "", name, flags=re.IGNORECASE)
         changed = name != previous
-    return name
+    return name + version if name in separate_version_families else name
+
+
+def get_separate_version_families(config: dict) -> list[str]:
+    families = config.get("separate_version_families", [])
+    if (
+        not isinstance(families, list)
+        or any(not isinstance(name, str) or not name.strip() for name in families)
+        or len(set(families)) != len(families)
+        or any(canonical_track_group(name) != name for name in families)
+    ):
+        raise ValueError("separate_version_families must be a list of unique base family names")
+    return families
 
 
 def dataset_fingerprint(samples: Iterable[FrameSample]) -> str:
@@ -396,17 +414,20 @@ def split_frames(samples: Sequence[FrameSample], split_cfg: dict):
     val_ratio = float(split_cfg.get("val_ratio", 0.2))
     if not 0.0 < val_ratio < 1.0:
         raise ValueError("val_ratio must be between 0 and 1")
+    version_families = get_separate_version_families(split_cfg)
+    sample_groups = [
+        canonical_track_group(sample.track, separate_version_families=version_families)
+        for sample in samples
+    ]
 
     generator = torch.Generator().manual_seed(seed)
     if strategy == "random_frame":
         order = torch.randperm(len(samples), generator=generator).tolist()
         n_val = max(1, int(len(samples) * val_ratio))
         val_indices, train_indices = order[:n_val], order[n_val:]
-        val_groups = sorted(
-            {canonical_track_group(samples[i].track) for i in val_indices}
-        )
+        val_groups = sorted({sample_groups[i] for i in val_indices})
     elif strategy == "track_holdout":
-        groups = sorted({canonical_track_group(sample.track) for sample in samples})
+        groups = sorted(set(sample_groups))
         configured = split_cfg.get("val_groups") or []
         if configured:
             val_groups = [str(group) for group in configured]
@@ -422,8 +443,8 @@ def split_frames(samples: Sequence[FrameSample], split_cfg: dict):
         val_group_set = set(val_groups)
         val_indices = [
             i
-            for i, sample in enumerate(samples)
-            if canonical_track_group(sample.track) in val_group_set
+            for i, group in enumerate(sample_groups)
+            if group in val_group_set
         ]
         val_index_set = set(val_indices)
         train_indices = [i for i in range(len(samples)) if i not in val_index_set]
@@ -436,7 +457,7 @@ def split_frames(samples: Sequence[FrameSample], split_cfg: dict):
         )
     train = [samples[i] for i in train_indices]
     val = [samples[i] for i in val_indices]
-    train_groups = sorted({canonical_track_group(sample.track) for sample in train})
+    train_groups = sorted({sample_groups[i] for i in train_indices})
     if strategy == "track_holdout" and set(train_groups) & set(val_groups):
         raise AssertionError("Track-family leakage detected in grouped split")
 
@@ -445,6 +466,7 @@ def split_frames(samples: Sequence[FrameSample], split_cfg: dict):
         "strategy": strategy,
         "seed": seed,
         "val_ratio": val_ratio,
+        "separate_version_families": version_families,
         "dataset_sha256": dataset_fingerprint(samples),
         "train_groups": train_groups,
         "val_groups": sorted(val_groups),

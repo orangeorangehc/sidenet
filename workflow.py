@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 import yaml
+from split_policy import excluded_groups
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -31,7 +32,10 @@ def read_yaml(path):
 
 def run_split(config_path, *, dry_run=False):
     recipe = read_yaml(config_path)
-    allowed = {"data_dir", "output", "expected_seeds", "split_seed", "real", "synthetic"}
+    allowed = {
+        "data_dir", "output", "expected_seeds", "split_seed", "real", "synthetic",
+        "separate_version_families", "exclude_groups",
+    }
     if set(recipe) - allowed:
         raise ValueError(f"Unknown split settings: {set(recipe) - allowed}")
     data_dir = project_path(recipe["data_dir"])
@@ -70,6 +74,7 @@ def run_split(config_path, *, dry_run=False):
             families.extend(groups)
     if len(families) != len(set(families)):
         raise ValueError("Each track family must occur in exactly one partition")
+    excluded_groups(recipe, families)
     if recipe["synthetic"]["test"]:
         raise ValueError("The final test partition must contain real tracks only")
     print(f"Data: {data_dir}\nData config: {data_config}\nManifest: {manifest_path}", flush=True)
@@ -106,6 +111,8 @@ def resolve_training(config_path):
         or set(expected_tracks) & set(parts["test"]["tracks"])
         or config["split"]["strategy"] != "track_holdout"
         or sorted(config["split"]["val_groups"]) != sorted(parts["validation"]["groups"])
+        or config["split"].get("separate_version_families", [])
+        != manifest.get("policy", {}).get("separate_version_families", [])
         or config["data"].get("expected_sha256") != manifest["train_validation_sha256"]
         or project_path(config["data"]["data_dir"]) != project_path(manifest["data_dir"])
         or config["data"]["coordinate_frame"] != manifest["coordinate_frame"]

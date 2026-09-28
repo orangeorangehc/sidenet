@@ -151,6 +151,45 @@ def test_track_group_normalization(name, expected):
     assert canonical_track_group(name) == expected
 
 
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("FSS22_V1_s42", "FSS22_V1"),
+        ("FSS22_V1_s43_flip", "FSS22_V1"),
+        ("FSS22_V2_s44_test_flip", "FSS22_V2"),
+        ("FSS22_s42_V2", "FSS22_V2"),
+        ("FSS22", "FSS22"),
+        ("FSE22_test_s43", "FSE22"),
+        ("AnotherMap_V2_s42", "AnotherMap"),
+    ],
+)
+def test_explicit_version_groups_still_merge_seeds_and_other_variants(name, expected):
+    assert canonical_track_group(name, separate_version_families=["FSS22"]) == expected
+
+
+def test_version_holdout_keeps_each_versions_seeds_together(tmp_path):
+    names = ["FSS22_V1_s42", "FSS22_V1_s43", "FSS22_V2_s42", "FSS22_V2_s43"]
+    for name in names:
+        _write_track(tmp_path, name)
+    _write_manifest(tmp_path, names)
+    samples, _ = load_frames(tmp_path, expected_coordinate_frame="ego")
+    train, val, manifest = split_frames(samples, {
+        "strategy": "track_holdout", "val_groups": ["FSS22_V1"],
+        "separate_version_families": ["FSS22"],
+    })
+    assert {s.track for s in val} == set(names[:2])
+    assert {s.track for s in train} == set(names[2:])
+    assert manifest["train_groups"] == ["FSS22_V2"]
+    assert manifest["val_groups"] == ["FSS22_V1"]
+    assert manifest["group_overlap"] == []
+    # Automatic group selection must also use versions and never split seeds.
+    auto_train, auto_val, _ = split_frames(samples, {
+        "strategy": "track_holdout", "separate_version_families": ["FSS22"],
+    })
+    assert len({s.track.split("_s")[0] for s in auto_train}) == 1
+    assert len({s.track.split("_s")[0] for s in auto_val}) == 1
+
+
 def test_multiseed_holdout_keeps_all_versions_together(tmp_path):
     names = ["FSS22_V1_s42", "FSS22_V2_s43", "FSE22_s42", "FSE22_test_s44", "hairpin_s42"]
     for name in names:

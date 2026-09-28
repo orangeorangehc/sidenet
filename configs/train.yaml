@@ -1,6 +1,6 @@
 # bash start_training.sh
 # 相对路径均相对于 SideNet/sidenet 项目根目录。重新划分不会覆盖本文件。
-data_config: configs/train_data.yaml
+data_config: configs/train_new_data_4.yaml
 
 data:
   input_mode: xyz
@@ -15,7 +15,7 @@ model:
 
 training:
   seed: 42
-  epochs: 300
+  epochs: 50
   batch_size: 16
   lr: 0.001
   weight_decay: 0.01
@@ -32,7 +32,7 @@ augmentation:
   flip_prob: 0.5
 
 save:
-  save_dir: runs/dgcnn_pipeline_run01  # 每次训练使用新目录，拒绝覆盖已有结果
+  save_dir: runs/dgcnn_new_run03  # 每次训练使用新目录，拒绝覆盖已有结果
   checkpoint_name: dgcnn.pth
 
 # 在导入 PyTorch 之前设置；不需要在终端手动 export。

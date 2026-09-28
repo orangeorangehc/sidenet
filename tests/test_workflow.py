@@ -95,6 +95,67 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(manifest["group_overlap"], [])
         self.assertEqual(manifest["partitions"]["test"]["tracks"], ["TestMap_s42", "TestMap_s43"])
 
+    def test_explicit_two_way_split_allows_empty_test(self):
+        self.policy["real"]["train"].append("TestMap")
+        self.policy["real"]["test"] = []
+        self.write_yaml(self.split_config, self.policy)
+        self.prepare()
+        manifest = json.loads(self.manifest.read_text())
+        self.assertEqual(manifest["partitions"]["test"]["tracks"], [])
+        self.assertEqual(manifest["partitions"]["test"]["num_frames"], 0)
+        self.assertEqual(len(manifest["partitions"]["train"]["tracks"]), 4)
+        self.assertEqual(len(manifest["partitions"]["validation"]["tracks"]), 2)
+        _, resolved, _, _ = workflow.resolve_training(self.training_config)
+        self.assertEqual(len(resolved["data"]["include_dirs"]), 6)
+
+    def test_version_split_survives_preparation_and_training(self):
+        # Reuse the tiny corpus with V1 as validation and V2 as final test.
+        root_manifest = yaml.safe_load((self.data / "dataset_manifest.yaml").read_text())
+        for old, new in (("ValMap", "FSS22_V1"), ("TestMap", "FSS22_V2")):
+            for seed in (42, 43):
+                old_name, new_name = f"{old}_s{seed}", f"{new}_s{seed}"
+                track = self.data / new_name
+                (self.data / old_name).rename(track)
+                meta = yaml.safe_load((track / "metadata.yaml").read_text())
+                meta["track_name"] = new_name
+                meta["source"].update(type="real", track=new)
+                self.write_yaml(track / "metadata.yaml", meta)
+                for item in root_manifest["tracks"]:
+                    if item["name"] == old_name:
+                        item["name"] = new_name
+        self.write_yaml(self.data / "dataset_manifest.yaml", root_manifest)
+        self.policy["separate_version_families"] = ["FSS22"]
+        self.policy["real"].update(validation=["FSS22_V1"], test=["FSS22_V2"])
+        self.policy["synthetic"]["validation"] = []
+        self.write_yaml(self.split_config, self.policy)
+        self.prepare()
+        manifest = json.loads(self.manifest.read_text())
+        for partition, version in (("validation", "V1"), ("test", "V2")):
+            part = manifest["partitions"][partition]
+            self.assertEqual(part["groups"], [f"FSS22_{version}"])
+            self.assertEqual(part["tracks"], [f"FSS22_{version}_s42", f"FSS22_{version}_s43"])
+            self.assertEqual(part["by_source"]["real"]["groups"], part["groups"])
+        result = self.command("start_training.sh", self.training_config)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        actual = json.loads((self.root / "run/split_manifest.json").read_text())
+        self.assertEqual(actual["val_groups"], ["FSS22_V1"])
+        self.assertEqual(actual["separate_version_families"], ["FSS22"])
+        self.assertEqual(set(actual["val_frames"]), set(manifest["partitions"]["validation"]["frame_ids"]))
+        self.assertEqual(set(actual["train_frames"]), set(manifest["partitions"]["train"]["frame_ids"]))
+        self.assertTrue(set(actual["train_frames"] + actual["val_frames"]).isdisjoint(
+            manifest["partitions"]["test"]["frame_ids"]
+        ))
+        # Losing the grouping setting would change the meaning of val_groups.
+        prepared = yaml.safe_load(self.prepared.read_text())
+        del prepared["split"]["separate_version_families"]
+        self.write_yaml(self.prepared, prepared)
+        with self.assertRaisesRegex(ValueError, "disagrees"):
+            workflow.resolve_training(self.training_config)
+        del self.policy["separate_version_families"]
+        self.write_yaml(self.split_config, self.policy)
+        with self.assertRaisesRegex(ValueError, "Policy/dataset family mismatch"):
+            self.prepare()
+
     def test_shell_scripts_work_from_other_directory_and_preview_is_read_only(self):
         result = self.command("split_data.sh", self.split_config, "--dry-run")
         self.assertEqual(result.returncode, 0, result.stderr)
